@@ -378,6 +378,6 @@ if st.session_state.show_result:
             char_base_judgment = CLASSIC_COMBO_JUDGMENT.get((char_day_name, char_hour_name), "暂无断语")
 
 
-            st.warning(base_judgment)
+            st.warning(char_base_judgment)
         else:
             st.warning("请在左侧输入一个汉字进行拆字起卦。")
