@@ -301,8 +301,9 @@ with st.sidebar:
     input_date = st.date_input("选择日期", value=default_time.date())
     input_time = st.time_input("选择时间", value=default_time.time())
 
-    # 默认经度为广东汕头 (116.68°E)
-    longitude = st.number_input("当地经度 (默认汕头 116.68°E)", value=116.68, format="%.2f")
+    # 默认经度为广东潮州 (116.63°E)
+    longitude = st.number_input("当地经度 (默认潮州 116.63°E)", value=116.63, format="%.2f")
+
 
     st.markdown("---")
     st.header("📖 拆字起卦")
