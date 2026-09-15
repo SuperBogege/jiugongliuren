@@ -2,8 +2,99 @@ import streamlit as st
 from datetime import datetime, timedelta
 import math
 from lunar_python import Solar
+import os
+import json
+import urllib.request
+import zipfile
 import opencc
 from pypinyin import pinyin, Style
+
+# ================= 康熙笔画与拆字模块 =================
+
+# 1. 初始化简繁转换器
+converter = opencc.OpenCC('s2t')
+
+# 2. Unihan 数据库配置
+UNIHAN_URL = "https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip"
+ZIP_FILE = "Unihan.zip"
+CACHE_FILE = "unihan_strokes.json"
+
+
+def load_or_generate_strokes_db():
+    """加载本地缓存，如果不存在则自动下载 Unihan 数据库并生成缓存"""
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    print("首次运行，正在下载 Unihan 笔画数据库（约 2MB）...")
+    try:
+        urllib.request.urlretrieve(UNIHAN_URL, ZIP_FILE)
+    except Exception as e:
+        print(f"下载失败: {e}，将使用空字典兜底。")
+        return {}
+
+    strokes_dict = {}
+    print("正在解析数据库，请稍候...")
+    with zipfile.ZipFile(ZIP_FILE, 'r') as z:
+        # Unihan_IRGSources.txt 包含了汉字的总笔画数 (kTotalStrokes)
+        with z.open('Unihan_IRGSources.txt') as f:
+            for line in f:
+                line = line.decode('utf-8')
+                if line.startswith('#') or not line.strip():
+                    continue
+                parts = line.strip().split('\t')
+                if len(parts) >= 3 and parts[1] == 'kTotalStrokes':
+                    unicode_val = parts[0]  # 例如 U+4E00
+                    strokes_val = parts[2].split(' ')[0]  # 取第一个数值
+                    strokes_dict[unicode_val] = int(strokes_val)
+
+    # 保存缓存，下次运行直接读取
+    with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(strokes_dict, f, ensure_ascii=False)
+
+    print(f"数据库准备就绪！共收录 {len(strokes_dict)} 个汉字的笔画数据。")
+    return strokes_dict
+
+
+# 加载数据库（首次运行会自动下载）
+UNIHAN_STROKES = load_or_generate_strokes_db()
+
+
+def get_accurate_strokes(char):
+    """获取单个字的准确笔画数（优先繁体，兜底简体）"""
+    # 1. 获取繁体字
+    traditional_char = converter.convert(char)
+
+    # 2. 优先查繁体字的 Unicode 编码对应的笔画
+    unicode_trad = f"U+{ord(traditional_char):04X}"
+    if unicode_trad in UNIHAN_STROKES:
+        return UNIHAN_STROKES[unicode_trad]
+
+    # 3. 如果繁体查不到，用简体字去查（兜底）
+    unicode_simp = f"U+{ord(char):04X}"
+    if unicode_simp in UNIHAN_STROKES:
+        return UNIHAN_STROKES[unicode_simp]
+
+    # 4. 终极兜底：如果数据库里真的没有（极罕见），返回 1 防止报错
+    return 1
+
+
+def get_character_info(char):
+    """拆字模块：简繁转换 + 拼音 + 准确笔画数"""
+    traditional_char = converter.convert(char)
+    py = pinyin(char, style=Style.NORMAL)[0][0]
+
+    # 获取准确笔画数
+    strokes = get_accurate_strokes(char)
+
+    return {
+        "繁体字": traditional_char,
+        "康熙笔画": strokes,
+        "拼音": py
+    }
+
+
+# ================= 模块结束 =================
 
 
 # ==========================================
@@ -41,26 +132,6 @@ def get_ganzhi_from_true_solar_time(true_solar_time):
     hour_ganzhi = lunar.getTimeZhi()
 
     return day_ganzhi, hour_ganzhi
-
-
-def get_character_info(char):
-    """拆字模块：简繁转换 + 拼音 + 笔画数（使用简易估算）"""
-    converter = opencc.OpenCC('s2t')
-    traditional_char = converter.convert(char)
-
-    # 获取拼音
-    py = pinyin(char, style=Style.NORMAL)[0][0]
-
-    # 获取笔画数：使用字符的 Unicode 编码值进行一个简单的哈希映射
-    # 这是一个轻量级的替代方案，避免了安装不存在的库
-    # 它会根据字符编码生成一个 1-30 之间的稳定数字，模拟笔画数
-    strokes = (ord(char) % 30) + 1
-
-    return {
-        "繁体字": traditional_char,
-        "康熙笔画": strokes,
-        "拼音": py
-    }
 
 
 def xiao_liu_ren_from_strokes(strokes, hour_zhi_index=None):
