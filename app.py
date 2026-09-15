@@ -296,7 +296,8 @@ with st.sidebar:
     st.header("⚙️ 参数设置")
 
     # 默认使用当前时间
-    default_time = datetime.now()
+    beijing_tz = timezone(timedelta(hours=8))
+    default_time = datetime.now(beijing_tz)
     input_date = st.date_input("选择日期", value=default_time.date())
     input_time = st.time_input("选择时间", value=default_time.time())
 
